@@ -17,6 +17,62 @@ docker compose down
 
 O seed usa `upsert` nas contas A e B. Rodar de novo não duplica linhas. O `saldo` volta para `100000` e `50000`.
 
+## Escolhas técnicas
+
+- Laravel 13 e PHP 8.5.12 no Dockerfile (php:8.5.12-cli).
+- PostgreSQL 17 para persistir contas e transferencias. Centavos entram como bigint.
+- Docker Compose sobe a API e o banco. Não há frontend, autenticação nem deploy.
+## Exemplos de requisições
+
+Saldo inicial:
+
+bash
+curl -s http://localhost:8000/contas/A
+curl -s http://localhost:8000/contas/B
+
+
+Transferência válida (A → B, 3000 centavos). Depois disso A fica 97000 e B fica 53000:
+
+bash
+curl -s -X POST http://localhost:8000/transferencias \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json" \
+  -d '{"origem":"A","destino":"B","valor":3000}'
+
+
+Histórico das duas contas:
+
+bash
+curl -s http://localhost:8000/contas/A/movimentacoes
+curl -s http://localhost:8000/contas/B/movimentacoes
+
+
+Entrada inválida (400):
+
+bash
+curl -s -o /dev/null -w "%{http_code}\n" -X POST http://localhost:8000/transferencias \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json" \
+  -d '{"origem":"A","destino":"B","valor":0}'
+
+
+Conta inexistente (404):
+
+bash
+curl -s -o /dev/null -w "%{http_code}\n" http://localhost:8000/contas/Z
+
+
+Saldo insuficiente (409):
+
+bash
+curl -s -o /dev/null -w "%{http_code}\n" -X POST http://localhost:8000/transferencias \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json" \
+  -d '{"origem":"A","destino":"B","valor":100001}'
+
+
+
+## Melhorias
 Idempotência (Chaves de Idempotência)
 
 O problema: Quedas de rede em clientes geram retries automáticos. Se a API não for idempotente, o mesmo pagamento/transferência é executado múltiplas vezes.
